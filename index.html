@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agenda — Lab Lamego</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #f4f2ee;
+    --surface: #ffffff;
+    --border: #e2ddd6;
+    --border-strong: #c8c2b8;
+    --text: #1a1816;
+    --text-2: #6b6560;
+    --text-3: #a09990;
+    --accent: #1a6b4a;
+    --accent-light: #e8f4ef;
+    --accent-border: #a8d5be;
+    --sus: #1a5c8a;
+    --sus-light: #e6f1f8;
+    --warn: #b85c00;
+    --warn-light: #fdf0e6;
+    --red: #c0392b;
+    --red-light: #fdecea;
+    --slot-h: 88px;
+    --radius: 10px;
+  }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── HEADER ── */
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 56px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+  }
+  .logo { font-size: 15px; font-weight: 600; letter-spacing: -0.3px; }
+  .logo span { color: var(--accent); }
+  .header-right { display: flex; align-items: center; gap: 12px; }
+  .date-nav { display: flex; align-items: center; gap: 8px; }
+  .date-nav button {
+    background: none; border: 1px solid var(--border); border-radius: 6px;
+    width: 30px; height: 30px; cursor: pointer; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+    color: var(--text-2); transition: all 0.15s;
+  }
+  .date-nav button:hover { border-color: var(--border-strong); color: var(--text); }
+  #current-date {
+    font-family: 'DM Mono', monospace; font-size: 13px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 6px; padding: 4px 10px; cursor: pointer;
+    color: var(--text); min-width: 110px; text-align: center;
+  }
+  .btn-novo {
+    background: var(--accent); color: #fff; border: none;
+    border-radius: 7px; padding: 0 14px; height: 32px;
+    font-family: 'DM Sans', sans-serif; font-size: 13px;
+    font-weight: 500; cursor: pointer; transition: opacity 0.15s;
+  }
+  .btn-novo:hover { opacity: 0.88; }
+
+  /* ── STATS BAR ── */
+  .stats-bar {
+    background: var(--surface); border-bottom: 1px solid var(--border);
+    padding: 0 24px; display: flex; gap: 24px; height: 40px;
+    align-items: center;
+  }
+  .stat { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--text-2); }
+  .stat-num { font-weight: 600; font-size: 13px; }
+  .stat-num.green { color: var(--accent); }
+  .stat-num.blue { color: var(--sus); }
+  .stat-num.orange { color: var(--warn); }
+  .stat-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+  /* ── GRID ── */
+  .grid-wrap { padding: 20px 24px; max-width: 860px; margin: 0 auto; }
+  .day-label {
+    font-family: 'DM Mono', monospace; font-size: 11px;
+    color: var(--text-3); text-transform: uppercase; letter-spacing: 1px;
+    margin-bottom: 10px; padding-left: 54px;
+  }
+  .slots { display: flex; flex-direction: column; gap: 6px; }
+
+  /* ── SLOT ── */
+  .slot {
+    display: grid; grid-template-columns: 46px 1fr; gap: 8px;
+    align-items: stretch; min-height: var(--slot-h);
+  }
+  .slot-time {
+    display: flex; flex-direction: column; align-items: flex-end;
+    justify-content: flex-start; padding-top: 14px;
+    font-family: 'DM Mono', monospace; font-size: 12px; font-weight: 500;
+    color: var(--text-3); line-height: 1;
+  }
+  .slot-time .hh { font-size: 14px; color: var(--text-2); }
+
+  .slot-card {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 12px 14px;
+    display: flex; align-items: center; gap: 12px;
+    cursor: pointer; transition: border-color 0.15s, box-shadow 0.15s;
+    position: relative; min-height: var(--slot-h);
+  }
+  .slot-card:hover { border-color: var(--border-strong); box-shadow: 0 2px 8px rgba(0,0,0,0.05); }
+  .slot-card.empty { border-style: dashed; background: transparent; cursor: default; }
+  .slot-card.empty:hover { border-color: var(--border-strong); }
+  .slot-card.confirmed { border-left: 3px solid var(--accent); }
+  .slot-card.confirmed .slot-check { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+  /* checkbox confirm */
+  .slot-check {
+    width: 20px; height: 20px; border-radius: 5px;
+    border: 1.5px solid var(--border-strong); flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; cursor: pointer; transition: all 0.15s;
+    background: transparent; color: transparent;
+  }
+  .slot-check:hover { border-color: var(--accent); }
+
+  .slot-info { flex: 1; min-width: 0; }
+  .slot-name { font-size: 14px; font-weight: 500; margin-bottom: 5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .slot-tags { display: flex; flex-wrap: wrap; gap: 4px; }
+  .tag {
+    font-size: 11px; font-weight: 500; padding: 2px 7px;
+    border-radius: 4px; white-space: nowrap;
+  }
+  .tag.sus { background: var(--sus-light); color: var(--sus); }
+  .tag.pclab { background: var(--warn-light); color: var(--warn); }
+  .tag.pardini { background: #f0ebfa; color: #6b3fa0; }
+  .tag.material { background: var(--red-light); color: var(--red); }
+  .tag.particular { background: #f0f0f0; color: var(--text-2); }
+
+  .slot-actions {
+    display: flex; flex-direction: column; gap: 4px;
+    opacity: 0; transition: opacity 0.15s;
+  }
+  .slot-card:hover .slot-actions { opacity: 1; }
+  .btn-icon {
+    background: none; border: 1px solid var(--border); border-radius: 5px;
+    width: 26px; height: 26px; display: flex; align-items: center;
+    justify-content: center; cursor: pointer; font-size: 13px;
+    color: var(--text-2); transition: all 0.15s;
+  }
+  .btn-icon:hover { border-color: var(--border-strong); color: var(--text); }
+  .btn-icon.del:hover { border-color: var(--red); color: var(--red); }
+
+  .add-btn {
+    background: none; border: none; font-size: 18px; color: var(--text-3);
+    cursor: pointer; width: 100%; height: 100%; display: flex;
+    align-items: center; justify-content: center; transition: color 0.15s;
+  }
+  .slot-card.empty:hover .add-btn { color: var(--accent); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.35); z-index: 200;
+    align-items: center; justify-content: center; padding: 16px;
+  }
+  .modal-overlay.open { display: flex; }
+  .modal {
+    background: var(--surface); border-radius: 14px;
+    padding: 24px; width: 100%; max-width: 420px;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
+  }
+  .modal-title {
+    font-size: 16px; font-weight: 600; margin-bottom: 20px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .modal-time-badge {
+    font-family: 'DM Mono', monospace; font-size: 12px;
+    background: var(--bg); border: 1px solid var(--border);
+    border-radius: 5px; padding: 3px 8px; color: var(--text-2);
+  }
+  .form-group { margin-bottom: 14px; }
+  label { font-size: 12px; color: var(--text-2); display: block; margin-bottom: 5px; font-weight: 500; }
+  input[type="text"] {
+    width: 100%; border: 1px solid var(--border); border-radius: 7px;
+    padding: 9px 12px; font-size: 14px; font-family: 'DM Sans', sans-serif;
+    background: var(--bg); color: var(--text); outline: none;
+    transition: border-color 0.15s;
+  }
+  input[type="text"]:focus { border-color: var(--accent); }
+
+  .toggle-group { display: flex; flex-direction: column; gap: 8px; }
+  .toggle-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 12px; border: 1px solid var(--border);
+    border-radius: 8px; cursor: pointer; transition: all 0.15s;
+    user-select: none;
+  }
+  .toggle-row:hover { border-color: var(--border-strong); background: var(--bg); }
+  .toggle-row.active { border-color: var(--accent-border); background: var(--accent-light); }
+  .toggle-label { font-size: 13px; font-weight: 500; }
+  .toggle-switch {
+    width: 32px; height: 18px; border-radius: 9px;
+    background: var(--border-strong); position: relative;
+    transition: background 0.2s; flex-shrink: 0;
+  }
+  .toggle-switch::after {
+    content: ''; position: absolute; width: 14px; height: 14px;
+    border-radius: 50%; background: #fff; top: 2px; left: 2px;
+    transition: transform 0.2s;
+  }
+  .toggle-row.active .toggle-switch { background: var(--accent); }
+  .toggle-row.active .toggle-switch::after { transform: translateX(14px); }
+
+  .modal-footer { display: flex; gap: 8px; margin-top: 20px; }
+  .btn-cancel {
+    flex: 1; background: none; border: 1px solid var(--border);
+    border-radius: 8px; padding: 10px; font-family: 'DM Sans', sans-serif;
+    font-size: 13px; cursor: pointer; color: var(--text-2); transition: all 0.15s;
+  }
+  .btn-cancel:hover { border-color: var(--border-strong); color: var(--text); }
+  .btn-save {
+    flex: 2; background: var(--accent); border: none;
+    border-radius: 8px; padding: 10px; font-family: 'DM Sans', sans-serif;
+    font-size: 13px; font-weight: 500; color: #fff; cursor: pointer;
+    transition: opacity 0.15s;
+  }
+  .btn-save:hover { opacity: 0.88; }
+
+  /* ── EMPTY DAY ── */
+  .empty-day {
+    text-align: center; padding: 60px 20px;
+    color: var(--text-3); font-size: 14px;
+  }
+
+  /* ── DATE PICKER HIDDEN ── */
+  #date-picker { position: absolute; opacity: 0; pointer-events: none; }
+
+  @media (max-width: 520px) {
+    header { padding: 0 14px; }
+    .grid-wrap { padding: 14px; }
+    .stats-bar { padding: 0 14px; gap: 16px; }
+    .stat span:not(.stat-num) { display: none; }
+  }
+
+  /* ── CALENDAR POPUP ── */
+  #cal-popup {
+    display: none; position: absolute; top: 52px; left: 50%; transform: translateX(-50%);
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; padding: 12px; z-index: 300;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.12); min-width: 240px;
+  }
+  #cal-popup.open { display: block; }
+  .cal-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 10px; font-size: 13px; font-weight: 600;
+  }
+  .cal-header button {
+    background: none; border: 1px solid var(--border); border-radius: 6px;
+    width: 26px; height: 26px; cursor: pointer; font-size: 16px;
+    display: flex; align-items: center; justify-content: center; color: var(--text-2);
+  }
+  .cal-header button:hover { border-color: var(--border-strong); color: var(--text); }
+  .cal-grid {
+    display: grid; grid-template-columns: repeat(7, 1fr); gap: 2px;
+  }
+  .cal-cell {
+    width: 30px; height: 30px; display: flex; align-items: center;
+    justify-content: center; border-radius: 6px; font-size: 12px;
+  }
+  .cal-week { color: var(--text-3); font-size: 11px; font-weight: 600; }
+  .cal-day { cursor: pointer; color: var(--text); transition: background 0.1s; }
+  .cal-day:hover { background: var(--bg); }
+  .cal-day.today { color: var(--accent); font-weight: 600; }
+  .cal-day.sel { background: var(--accent); color: #fff !important; font-weight: 600; }
+  .date-nav { position: relative; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Lab <span>Lamego</span></div>
+  <div class="header-right">
+    <div class="date-nav">
+      <button onclick="changeDay(-1)" title="Dia anterior">&#8249;</button>
+      <span id="current-date" onclick="openDatePicker()">--/--/----</span>
+      <div id="cal-popup"></div>
+      <button onclick="changeDay(1)" title="Próximo dia">&#8250;</button>
+    </div>
+    <button class="btn-novo" onclick="openModal(null)">+ Novo</button>
+  </div>
+</header>
+
+<div class="stats-bar">
+  <div class="stat"><div class="stat-dot" style="background:var(--text-3)"></div><span class="stat-num" id="stat-total">0</span><span>/12 slots</span></div>
+  <div class="stat"><div class="stat-dot" style="background:var(--accent)"></div><span class="stat-num green" id="stat-conf">0</span><span>confirmados</span></div>
+  <div class="stat"><div class="stat-dot" style="background:var(--sus)"></div><span class="stat-num blue" id="stat-sus">0</span><span>SUS</span></div>
+  <div class="stat"><div class="stat-dot" style="background:var(--red)"></div><span class="stat-num orange" id="stat-mat">0</span><span>c/ material</span></div>
+</div>
+
+<div class="grid-wrap">
+  <div class="day-label" id="day-label">Segunda-feira</div>
+  <div class="slots" id="slots-container"></div>
+</div>
+
+<!-- MODAL -->
+<div class="modal-overlay" id="modal-overlay" onclick="onOverlayClick(event)">
+  <div class="modal">
+    <div class="modal-title">
+      <span id="modal-title-text">Novo agendamento</span>
+      <span class="modal-time-badge" id="modal-time-badge">07:00</span>
+    </div>
+    <div class="form-group">
+      <label>Nome do paciente</label>
+      <input type="text" id="f-nome" placeholder="Nome completo" autocomplete="off">
+    </div>
+    <div class="toggle-group">
+      <div class="toggle-row" id="tog-sus" onclick="toggle('sus')">
+        <span class="toggle-label">É SUS?</span>
+        <div class="toggle-switch"></div>
+      </div>
+      <div class="toggle-row" id="tog-pclab" onclick="toggle('pclab')">
+        <span class="toggle-label">Cadastrado no PcLab?</span>
+        <div class="toggle-switch"></div>
+      </div>
+      <div class="toggle-row" id="tog-pardini" onclick="toggle('pardini')">
+        <span class="toggle-label">Cadastrado no Pardini?</span>
+        <div class="toggle-switch"></div>
+      </div>
+      <div class="toggle-row" id="tog-material" onclick="toggle('material')">
+        <span class="toggle-label">Tem material a retirar?</span>
+        <div class="toggle-switch"></div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn-save" onclick="saveSlot()">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SLOTS = ['07:00','07:20','07:40','08:00','08:20','08:40','09:00','09:20','09:40','10:00','10:20','10:40'];
+const DAYS_PT = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
+
+function dateToStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return y + '-' + m + '-' + day;
+}
+function strToDate(s) {
+  const [y, m, d] = s.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+function todayStr() { return dateToStr(new Date()); }
+
+let currentDate = todayStr();
+let editingSlot = null;
+let calYear, calMonth;
+let form = { sus: false, pclab: false, pardini: false, material: false };
+
+function storageKey(date) { return 'lamego_' + date; }
+
+function loadDay(date) {
+  const raw = localStorage.getItem(storageKey(date));
+  return raw ? JSON.parse(raw) : {};
+}
+
+function saveDay(date, data) {
+  localStorage.setItem(storageKey(date), JSON.stringify(data));
+}
+
+function formatDate(str) {
+  const [y, m, d] = str.split('-');
+  return d + '/' + m + '/' + y;
+}
+
+function renderHeader() {
+  document.getElementById('current-date').textContent = formatDate(currentDate);
+  const d = strToDate(currentDate);
+  document.getElementById('day-label').textContent = DAYS_PT[d.getDay()];
+}
+
+function renderStats(data) {
+  const entries = Object.values(data).filter(v => v && v.nome);
+  document.getElementById('stat-total').textContent = entries.length;
+  document.getElementById('stat-conf').textContent = entries.filter(v => v.confirmed).length;
+  document.getElementById('stat-sus').textContent = entries.filter(v => v.sus).length;
+  document.getElementById('stat-mat').textContent = entries.filter(v => v.material).length;
+}
+
+function renderSlots() {
+  const data = loadDay(currentDate);
+  renderHeader();
+  renderStats(data);
+  const container = document.getElementById('slots-container');
+  container.innerHTML = '';
+
+  SLOTS.forEach(time => {
+    const entry = data[time];
+    const slot = document.createElement('div');
+    slot.className = 'slot';
+
+    const [hh, mm] = time.split(':');
+    slot.innerHTML = `<div class="slot-time"><span class="hh">${hh}</span><span>${mm}</span></div>`;
+
+    const card = document.createElement('div');
+
+    if (entry && entry.nome) {
+      card.className = 'slot-card' + (entry.confirmed ? ' confirmed' : '');
+
+      const tags = [];
+      if (entry.sus) tags.push('<span class="tag sus">SUS</span>');
+      else tags.push('<span class="tag particular">Particular</span>');
+      if (entry.pclab) tags.push('<span class="tag pclab">PcLab</span>');
+      if (entry.pardini) tags.push('<span class="tag pardini">Pardini</span>');
+      if (entry.material) tags.push('<span class="tag material">Material</span>');
+
+      card.innerHTML = `
+        <div class="slot-check" onclick="toggleConfirm('${time}', event)" title="Confirmar horário">✓</div>
+        <div class="slot-info">
+          <div class="slot-name">${entry.nome}</div>
+          <div class="slot-tags">${tags.join('')}</div>
+        </div>
+        <div class="slot-actions">
+          <button class="btn-icon" onclick="openModal('${time}')" title="Editar">✎</button>
+          <button class="btn-icon del" onclick="deleteSlot('${time}', event)" title="Remover">✕</button>
+        </div>`;
+    } else {
+      card.className = 'slot-card empty';
+      card.innerHTML = `<button class="add-btn" onclick="openModal('${time}')" title="Adicionar">+</button>`;
+    }
+
+    slot.appendChild(card);
+    container.appendChild(slot);
+  });
+}
+
+function toggleConfirm(time, e) {
+  e.stopPropagation();
+  const data = loadDay(currentDate);
+  if (data[time]) {
+    data[time].confirmed = !data[time].confirmed;
+    saveDay(currentDate, data);
+    renderSlots();
+  }
+}
+
+function deleteSlot(time, e) {
+  e.stopPropagation();
+  if (!confirm('Remover este agendamento?')) return;
+  const data = loadDay(currentDate);
+  delete data[time];
+  saveDay(currentDate, data);
+  renderSlots();
+}
+
+function openModal(time) {
+  editingSlot = time;
+  const data = loadDay(currentDate);
+  const entry = time && data[time] && data[time].nome ? data[time] : null;
+
+  document.getElementById('modal-title-text').textContent = entry ? 'Editar agendamento' : 'Novo agendamento';
+
+  if (time) {
+    document.getElementById('modal-time-badge').textContent = time;
+  } else {
+    const taken = Object.keys(data);
+    const free = SLOTS.find(s => !taken.includes(s));
+    document.getElementById('modal-time-badge').textContent = free || SLOTS[0];
+    editingSlot = free || SLOTS[0];
+  }
+
+  document.getElementById('f-nome').value = entry ? entry.nome : '';
+  form = { sus: !!(entry && entry.sus), pclab: !!(entry && entry.pclab), pardini: !!(entry && entry.pardini), material: !!(entry && entry.material) };
+  ['sus','pclab','pardini','material'].forEach(k => {
+    document.getElementById('tog-' + k).classList.toggle('active', form[k]);
+  });
+
+  document.getElementById('modal-overlay').classList.add('open');
+  setTimeout(() => document.getElementById('f-nome').focus(), 100);
+}
+
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  editingSlot = null;
+}
+
+function onOverlayClick(e) {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+}
+
+function toggle(key) {
+  form[key] = !form[key];
+  document.getElementById('tog-' + key).classList.toggle('active', form[key]);
+}
+
+function saveSlot() {
+  const nome = document.getElementById('f-nome').value.trim();
+  if (!nome) { document.getElementById('f-nome').focus(); return; }
+  const data = loadDay(currentDate);
+  const existing = data[editingSlot] || {};
+  data[editingSlot] = { nome, sus: form.sus, pclab: form.pclab, pardini: form.pardini, material: form.material, confirmed: existing.confirmed || false };
+  saveDay(currentDate, data);
+  closeModal();
+  renderSlots();
+}
+
+function changeDay(dir) {
+  const d = strToDate(currentDate);
+  d.setDate(d.getDate() + dir);
+  currentDate = dateToStr(d);
+  renderSlots();
+}
+
+function openDatePicker() {
+  const cal = document.getElementById('cal-popup');
+  if (cal.classList.contains('open')) { cal.classList.remove('open'); return; }
+  renderCalendar();
+  cal.classList.add('open');
+}
+
+let calYear, calMonth;
+
+function renderCalendar() {
+  const cur = strToDate(currentDate);
+  if (calYear === undefined) { calYear = cur.getFullYear(); calMonth = cur.getMonth(); }
+  const MONTHS = ['Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];
+  const WEEK = ['D','S','T','Q','Q','S','S'];
+  const first = new Date(calYear, calMonth, 1);
+  const last = new Date(calYear, calMonth + 1, 0);
+  const startDow = first.getDay();
+  const todayDs = todayStr();
+
+  let html = `<div class="cal-header">
+    <button onclick="calNav(-1)">&#8249;</button>
+    <span>${MONTHS[calMonth]} ${calYear}</span>
+    <button onclick="calNav(1)">&#8250;</button>
+  </div><div class="cal-grid">`;
+  WEEK.forEach(w => { html += `<div class="cal-cell cal-week">${w}</div>`; });
+  for (let i = 0; i < startDow; i++) html += '<div class="cal-cell"></div>';
+  for (let d = 1; d <= last.getDate(); d++) {
+    const ds = dateToStr(new Date(calYear, calMonth, d));
+    const isCur = ds === currentDate;
+    const isToday = ds === todayDs;
+    html += `<div class="cal-cell cal-day${isCur ? ' sel' : ''}${isToday && !isCur ? ' today' : ''}" onclick="pickCalDay('${ds}')">${d}</div>`;
+  }
+  html += '</div>';
+  document.getElementById('cal-popup').innerHTML = html;
+}
+
+function calNav(dir) {
+  calMonth += dir;
+  if (calMonth > 11) { calMonth = 0; calYear++; }
+  if (calMonth < 0) { calMonth = 11; calYear--; }
+  renderCalendar();
+}
+
+function pickCalDay(ds) {
+  currentDate = ds;
+  calYear = undefined;
+  document.getElementById('cal-popup').classList.remove('open');
+  renderSlots();
+}
+
+document.addEventListener('click', function(e) {
+  const cal = document.getElementById('cal-popup');
+  const btn = document.getElementById('current-date');
+  if (!cal.contains(e.target) && e.target !== btn) cal.classList.remove('open');
+});
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+renderSlots();
+</script>
+</body>
+</html>
