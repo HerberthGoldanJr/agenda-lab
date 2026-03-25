@@ -474,27 +474,28 @@ window.save = async function() {
   const min     = document.getElementById('f-min').value;
   const newTime = hora+':'+min;
 
-  var newData = JSON.parse(JSON.stringify(dayData)); // deep copy
+  var newData = JSON.parse(JSON.stringify(dayData));
+
+  // Migra formato legado (objeto -> array) para evitar erros
+  Object.keys(newData).forEach(function(k) {
+    if (!Array.isArray(newData[k])) {
+      var v = newData[k];
+      if (v && v.nome) newData[k] = [{id:uid(), nome:v.nome, sus:!!v.sus, pclab:!!v.pclab, pardini:!!v.pardini, material:!!v.material, confirmed:!!v.confirmed}];
+      else delete newData[k];
+    }
+  });
 
   if (editId) {
-    // Editando paciente existente
-    // Remove do horário antigo
-    if (editTime) {
-      newData[editTime] = (newData[editTime]||[]).filter(function(p){ return p.id!==editId; });
+    if (editTime && Array.isArray(newData[editTime])) {
+      newData[editTime] = newData[editTime].filter(function(p){ return p.id!==editId; });
       if (newData[editTime].length===0) delete newData[editTime];
     }
-    // Adiciona no novo horário
-    var paciente = {id: editId, nome:nome, sus:F.sus, pclab:F.pclab, pardini:F.pardini, material:F.material, confirmed:false};
-    // Tenta preservar confirmed do original
-    if (editTime && dayData[editTime]) {
-      var orig = (dayData[editTime]||[]).find(function(p){ return p.id===editId; });
-      if (orig) paciente.confirmed = orig.confirmed||false;
-    }
-    if (!newData[newTime]) newData[newTime]=[];
+    var orig = (editTime && Array.isArray(dayData[editTime])) ? (dayData[editTime].find(function(p){ return p.id===editId; })||null) : null;
+    var paciente = {id:editId, nome:nome, sus:F.sus, pclab:F.pclab, pardini:F.pardini, material:F.material, confirmed:orig?!!orig.confirmed:false};
+    if (!Array.isArray(newData[newTime])) newData[newTime]=[];
     newData[newTime].push(paciente);
   } else {
-    // Novo paciente
-    if (!newData[newTime]) newData[newTime]=[];
+    if (!Array.isArray(newData[newTime])) newData[newTime]=[];
     newData[newTime].push({id:uid(), nome:nome, sus:F.sus, pclab:F.pclab, pardini:F.pardini, material:F.material, confirmed:false});
   }
 
