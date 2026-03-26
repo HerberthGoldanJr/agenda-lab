@@ -113,6 +113,7 @@ header {
 }
 .card:hover { border-color: var(--border2); box-shadow: 0 2px 8px rgba(0,0,0,.05); }
 .card.confirmed { border-left: 3px solid var(--green); }
+.card.missed    { border-left: 3px solid var(--red); opacity: 0.6; }
 .card-add {
   background: transparent; border: 1px dashed var(--border);
   border-radius: var(--r); padding: 8px 14px;
@@ -122,21 +123,31 @@ header {
 }
 .card-add:hover { border-color: var(--green); color: var(--green); }
 
-.chk-wrap { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; align-items: center; }
+/* FIX: checkboxes duplos (confirmar / falta) */
+.chk-wrap {
+  display: flex; flex-direction: column; gap: 3px;
+  flex-shrink: 0; align-items: center;
+}
 .chk-label { font-size: 9px; color: var(--text3); font-weight: 500; white-space: nowrap; text-align: center; }
 .chk-row { display: flex; gap: 6px; }
 .chk {
-  width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0;
+  width: 22px; height: 22px; border-radius: 5px; flex-shrink: 0;
   border: 1.5px solid var(--border2); display: flex; align-items: center;
-  justify-content: center; font-size: 11px; cursor: pointer;
+  justify-content: center; font-size: 12px; cursor: pointer;
   transition: all .15s; color: transparent; background: transparent;
+  user-select: none;
 }
-.chk:hover { border-color: var(--green); }
-.chk.chk-conf:hover { border-color: var(--green); }
-.chk.chk-miss:hover { border-color: var(--red); }
-.confirmed .chk.chk-conf { background: var(--green); border-color: var(--green); color: #fff; }
-.missed .chk.chk-miss { background: var(--red); border-color: var(--red); color: #fff; }
-.missed { opacity: 0.6; }
+/* Hover states */
+.chk.chk-conf:hover { border-color: var(--green); color: var(--green); }
+.chk.chk-miss:hover { border-color: var(--red);   color: var(--red); }
+
+/* Active states — controlados por classe no .card pai */
+.card.confirmed .chk.chk-conf { background: var(--green); border-color: var(--green); color: #fff; }
+.card.missed    .chk.chk-miss { background: var(--red);   border-color: var(--red);   color: #fff; }
+
+/* Quando confirmado, o botão de falta fica neutro (e vice-versa) */
+.card.confirmed .chk.chk-miss:hover { border-color: var(--border2); color: var(--text3); }
+.card.missed    .chk.chk-conf:hover { border-color: var(--border2); color: var(--text3); }
 
 .info { flex: 1; min-width: 0; }
 .pname { font-size: 14px; font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -269,7 +280,7 @@ header {
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
-import { getFirestore, doc, onSnapshot, updateDoc, setDoc, getDoc, deleteField }
+import { getFirestore, doc, onSnapshot, updateDoc, setDoc, getDoc }
   from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
 const firebaseConfig = {
@@ -298,12 +309,11 @@ function fmt(s) { const p=s.split('-'); return p[2]+'/'+p[1]+'/'+p[0]; }
 function uid() { return Date.now().toString(36)+Math.random().toString(36).slice(2,6); }
 
 // ── state ──────────────────────────────────────────────
-// dayData estrutura: { "07:00": [ {id, nome, sus, pclab, pardini, material, confirmed}, ... ], ... }
 let cur = today();
 let dayData = {};
 let unsubscribe = null;
-let editTime = null;   // horário que está sendo editado
-let editId   = null;   // id do paciente (null = novo)
+let editTime = null;
+let editId   = null;
 let F = {sus:false, pclab:false, pardini:false, material:false};
 let calY, calM;
 
@@ -332,36 +342,57 @@ async function persistData(newData) {
   } catch(e) { console.error(e); setSync('err'); }
 }
 
+// ── migrar formato legado ──────────────────────────────
+function migrateLegacy(data) {
+  var out = {};
+  Object.keys(data).forEach(function(k) {
+    var v = data[k];
+    if (Array.isArray(v)) {
+      out[k] = v;
+    } else if (v && typeof v === 'object' && v.nome) {
+      out[k] = [{id: uid(), nome: v.nome, sus: !!v.sus, pclab: !!v.pclab,
+                 pardini: !!v.pardini, material: !!v.material,
+                 confirmed: !!v.confirmed, missed: !!v.missed}];
+    }
+    // ignora chaves inválidas
+  });
+  return out;
+}
+
 // ── render ─────────────────────────────────────────────
 function render() {
   document.getElementById('lbl-date').textContent = fmt(cur);
   document.getElementById('lbl-day').textContent  = DAYS_PT[s2d(cur).getDay()];
 
   // Dashboard
-  var total=0, conf=0, sus=0, mat=0;
+  var total=0, conf=0, sus=0, mat=0, missed=0;
   Object.values(dayData).forEach(function(arr) {
     if (!Array.isArray(arr)) return;
     arr.forEach(function(p) {
       total++;
       if (p.confirmed) conf++;
-      if (p.sus) sus++;
-      if (p.material) mat++;
+      if (p.missed)    missed++;
+      if (p.sus)       sus++;
+      if (p.material)  mat++;
     });
   });
-  var missed = 0;
-  Object.values(dayData).forEach(function(arr) {
-    if (!Array.isArray(arr)) return;
-    arr.forEach(function(p){ if (p.missed) missed++; });
-  });
+
   document.getElementById('d-total').textContent    = total;
   document.getElementById('d-conf').textContent     = conf;
   document.getElementById('d-sus').textContent      = sus;
   document.getElementById('d-mat').textContent      = mat;
-  document.getElementById('d-sub').textContent      = total===1?'agendado hoje':'agendados hoje';
-  document.getElementById('d-conf-sub').textContent = missed > 0 ? missed+(missed===1?' falta':' faltas') : (total-conf)+' aguardando';
+  document.getElementById('d-sub').textContent      = total === 1 ? 'agendado hoje' : 'agendados hoje';
+
+  // Sub do dashboard de confirmados: mostra faltas se existirem, senão aguardando
+  if (missed > 0) {
+    document.getElementById('d-conf-sub').textContent = missed + (missed === 1 ? ' falta' : ' faltas');
+  } else {
+    var waiting = total - conf;
+    document.getElementById('d-conf-sub').textContent = waiting + (waiting === 1 ? ' aguardando' : ' aguardando');
+  }
 
   // Slots
-  var times = Object.keys(dayData).filter(function(k){ return Array.isArray(dayData[k]) && dayData[k].length>0; });
+  var times = Object.keys(dayData).filter(function(k){ return Array.isArray(dayData[k]) && dayData[k].length > 0; });
   times.sort();
 
   const cont = document.getElementById('slots');
@@ -388,15 +419,27 @@ function render() {
     const cardsWrap = document.createElement('div');
     cardsWrap.className = 'time-cards';
 
-    pacientes.forEach(function(p, idx) {
+    pacientes.forEach(function(p) {
       const card = document.createElement('div');
-      card.className = 'card'+(p.confirmed?' confirmed':'')+(p.missed?' missed':'');
-      var tags = '<span class="tag '+(p.sus?'sus':'part')+'">'+(p.sus?'SUS':'Particular')+'</span>';
+      var cls = 'card';
+      if (p.confirmed) cls += ' confirmed';
+      if (p.missed)    cls += ' missed';
+      card.className = cls;
+
+      var tags = '<span class="tag '+(p.sus ? 'sus' : 'part')+'">'+(p.sus ? 'SUS' : 'Particular')+'</span>';
       if (p.pclab)    tags += '<span class="tag pclab">PcLab</span>';
       if (p.pardini)  tags += '<span class="tag pardini">Pardini</span>';
       if (p.material) tags += '<span class="tag mat">Material</span>';
+
+      // FIX: checkboxes com classes corretas e tooltips, chamando as funções corretas
       card.innerHTML =
-        '<div class="chk" onclick="window.toggleConfirm(\''+t+'\',\''+p.id+'\')">✓</div>'+
+        '<div class="chk-wrap">'+
+          '<div class="chk-row">'+
+            '<div class="chk chk-conf" title="Confirmar" onclick="window.toggleConfirm(\''+t+'\',\''+p.id+'\')">✓</div>'+
+            '<div class="chk chk-miss" title="Falta"     onclick="window.toggleMissed(\''+t+'\',\''+p.id+'\')">✕</div>'+
+          '</div>'+
+          '<div class="chk-label">'+(p.confirmed ? 'Confirmado' : p.missed ? 'Falta' : 'Status')+'</div>'+
+        '</div>'+
         '<div class="info">'+
           '<div class="pname">'+p.nome+'</div>'+
           '<div class="tags">'+tags+'</div>'+
@@ -405,10 +448,11 @@ function render() {
           '<button class="ico" onclick="window.openModal(\''+t+'\',\''+p.id+'\')" title="Editar">✎</button>'+
           '<button class="ico del" onclick="window.delPaciente(\''+t+'\',\''+p.id+'\')" title="Remover">✕</button>'+
         '</div>';
+
       cardsWrap.appendChild(card);
     });
 
-    // Botão de adicionar outro paciente no mesmo horário
+    // Botão adicionar no mesmo horário
     const addBtn = document.createElement('div');
     addBtn.className = 'card-add';
     addBtn.onclick = function(){ window.openModal(t, null); };
@@ -421,27 +465,32 @@ function render() {
 }
 
 // ── actions ────────────────────────────────────────────
+
+// FIX: toggleConfirm — se já confirmado, desfaz; se não, confirma e limpa missed
 window.toggleConfirm = function(t, id) {
   var arr = (dayData[t]||[]).map(function(p){
-    return p.id===id ? Object.assign({},p,{confirmed:!p.confirmed, missed:false}) : p;
+    if (p.id !== id) return p;
+    return Object.assign({}, p, { confirmed: !p.confirmed, missed: false });
   });
-  var newData = Object.assign({},dayData); newData[t]=arr;
+  var newData = Object.assign({}, dayData); newData[t] = arr;
   persistData(newData);
 };
 
+// FIX: toggleMissed — se já missed, desfaz; se não, marca falta e limpa confirmed
 window.toggleMissed = function(t, id) {
   var arr = (dayData[t]||[]).map(function(p){
-    return p.id===id ? Object.assign({},p,{missed:!p.missed, confirmed:false}) : p;
+    if (p.id !== id) return p;
+    return Object.assign({}, p, { missed: !p.missed, confirmed: false });
   });
-  var newData = Object.assign({},dayData); newData[t]=arr;
+  var newData = Object.assign({}, dayData); newData[t] = arr;
   persistData(newData);
 };
 
 window.delPaciente = function(t, id) {
   if (!confirm('Remover este paciente?')) return;
-  var arr = (dayData[t]||[]).filter(function(p){ return p.id!==id; });
-  var newData = Object.assign({},dayData);
-  if (arr.length===0) delete newData[t]; else newData[t]=arr;
+  var arr = (dayData[t]||[]).filter(function(p){ return p.id !== id; });
+  var newData = Object.assign({}, dayData);
+  if (arr.length === 0) delete newData[t]; else newData[t] = arr;
   persistData(newData);
 };
 
@@ -461,27 +510,27 @@ window.openModal = function(t, id) {
 
   var defaultT = t || '07:00';
   document.getElementById('f-hora').value = defaultT.split(':')[0];
-  document.getElementById('f-min').value  = defaultT.split(':')[1]||'00';
+  document.getElementById('f-min').value  = defaultT.split(':')[1] || '00';
 
   var p = null;
   if (t && id) {
-    var arr = dayData[t]||[];
-    p = arr.find(function(x){ return x.id===id; })||null;
+    var arr = dayData[t] || [];
+    p = arr.find(function(x){ return x.id === id; }) || null;
   }
 
   document.getElementById('m-title').textContent = p ? 'Editar paciente' : 'Novo agendamento';
   document.getElementById('f-nome').value = p ? p.nome : '';
-  F = {sus:!!(p&&p.sus), pclab:!!(p&&p.pclab), pardini:!!(p&&p.pardini), material:!!(p&&p.material)};
+  F = {sus: !!(p&&p.sus), pclab: !!(p&&p.pclab), pardini: !!(p&&p.pardini), material: !!(p&&p.material)};
   ['sus','pclab','pardini','material'].forEach(function(k){
-    document.getElementById('t-'+k).classList.toggle('on',F[k]);
+    document.getElementById('t-'+k).classList.toggle('on', F[k]);
   });
   document.getElementById('overlay').classList.add('show');
-  setTimeout(function(){ document.getElementById('f-nome').focus(); },80);
+  setTimeout(function(){ document.getElementById('f-nome').focus(); }, 80);
 };
 
 window.closeModal = function() { document.getElementById('overlay').classList.remove('show'); };
-window.onBg = function(e) { if(e.target===document.getElementById('overlay')) window.closeModal(); };
-window.tog = function(k) { F[k]=!F[k]; document.getElementById('t-'+k).classList.toggle('on',F[k]); };
+window.onBg = function(e) { if (e.target === document.getElementById('overlay')) window.closeModal(); };
+window.tog = function(k) { F[k] = !F[k]; document.getElementById('t-'+k).classList.toggle('on', F[k]); };
 
 window.save = async function() {
   const nome = document.getElementById('f-nome').value.trim();
@@ -492,31 +541,36 @@ window.save = async function() {
 
   const hora    = document.getElementById('f-hora').value;
   const min     = document.getElementById('f-min').value;
-  const newTime = hora+':'+min;
+  const newTime = hora + ':' + min;
 
-  var newData = JSON.parse(JSON.stringify(dayData));
-
-  // Migra formato legado (objeto -> array) para evitar erros
-  Object.keys(newData).forEach(function(k) {
-    if (!Array.isArray(newData[k])) {
-      var v = newData[k];
-      if (v && v.nome) newData[k] = [{id:uid(), nome:v.nome, sus:!!v.sus, pclab:!!v.pclab, pardini:!!v.pardini, material:!!v.material, confirmed:!!v.confirmed}];
-      else delete newData[k];
-    }
-  });
+  // FIX: migração de formato legado centralizada
+  var newData = migrateLegacy(JSON.parse(JSON.stringify(dayData)));
 
   if (editId) {
+    // Remove do horário antigo
     if (editTime && Array.isArray(newData[editTime])) {
-      newData[editTime] = newData[editTime].filter(function(p){ return p.id!==editId; });
-      if (newData[editTime].length===0) delete newData[editTime];
+      newData[editTime] = newData[editTime].filter(function(p){ return p.id !== editId; });
+      if (newData[editTime].length === 0) delete newData[editTime];
     }
-    var orig = (editTime && Array.isArray(dayData[editTime])) ? (dayData[editTime].find(function(p){ return p.id===editId; })||null) : null;
-    var paciente = {id:editId, nome:nome, sus:F.sus, pclab:F.pclab, pardini:F.pardini, material:F.material, confirmed:orig?!!orig.confirmed:false};
-    if (!Array.isArray(newData[newTime])) newData[newTime]=[];
+    // Preserva confirmed/missed ao editar
+    var orig = (editTime && Array.isArray(dayData[editTime]))
+      ? (dayData[editTime].find(function(p){ return p.id === editId; }) || null)
+      : null;
+    var paciente = {
+      id: editId, nome: nome,
+      sus: F.sus, pclab: F.pclab, pardini: F.pardini, material: F.material,
+      confirmed: orig ? !!orig.confirmed : false,
+      missed:    orig ? !!orig.missed    : false
+    };
+    if (!Array.isArray(newData[newTime])) newData[newTime] = [];
     newData[newTime].push(paciente);
   } else {
-    if (!Array.isArray(newData[newTime])) newData[newTime]=[];
-    newData[newTime].push({id:uid(), nome:nome, sus:F.sus, pclab:F.pclab, pardini:F.pardini, material:F.material, confirmed:false});
+    if (!Array.isArray(newData[newTime])) newData[newTime] = [];
+    newData[newTime].push({
+      id: uid(), nome: nome,
+      sus: F.sus, pclab: F.pclab, pardini: F.pardini, material: F.material,
+      confirmed: false, missed: false
+    });
   }
 
   await persistData(newData);
@@ -525,36 +579,38 @@ window.save = async function() {
 };
 
 // ── nav ────────────────────────────────────────────────
-window.moveDay = function(dir) { var d=s2d(cur); d.setDate(d.getDate()+dir); cur=d2s(d); subscribeDay(); };
+window.moveDay = function(dir) {
+  var d = s2d(cur); d.setDate(d.getDate() + dir); cur = d2s(d); subscribeDay();
+};
 
 window.toggleCal = function() {
-  const el=document.getElementById('cal');
-  if(el.classList.contains('show')){el.classList.remove('show');return;}
-  var d=s2d(cur); calY=d.getFullYear(); calM=d.getMonth();
+  const el = document.getElementById('cal');
+  if (el.classList.contains('show')) { el.classList.remove('show'); return; }
+  var d = s2d(cur); calY = d.getFullYear(); calM = d.getMonth();
   drawCal(); el.classList.add('show');
 };
 
 function drawCal() {
-  const tdStr=today(), first=new Date(calY,calM,1), last=new Date(calY,calM+1,0), dow=first.getDay();
-  var h='<div class="cal-hd"><button onclick="window.calNav(-1)">&#8249;</button><span>'+MONTHS[calM]+' '+calY+'</span><button onclick="window.calNav(1)">&#8250;</button></div><div class="cal-grid">';
-  ['D','S','T','Q','Q','S','S'].forEach(function(w){h+='<div class="cal-wk">'+w+'</div>';});
-  for(var i=0;i<dow;i++) h+='<div></div>';
-  for(var d=1;d<=last.getDate();d++){
-    var ds=d2s(new Date(calY,calM,d));
-    h+='<div class="cal-d'+(ds===cur?' cur':ds===tdStr?' today':'')+'" onclick="window.pickDay(\''+ds+'\')">'+d+'</div>';
+  const tdStr = today(), first = new Date(calY,calM,1), last = new Date(calY,calM+1,0), dow = first.getDay();
+  var h = '<div class="cal-hd"><button onclick="window.calNav(-1)">&#8249;</button><span>'+MONTHS[calM]+' '+calY+'</span><button onclick="window.calNav(1)">&#8250;</button></div><div class="cal-grid">';
+  ['D','S','T','Q','Q','S','S'].forEach(function(w){ h += '<div class="cal-wk">'+w+'</div>'; });
+  for (var i = 0; i < dow; i++) h += '<div></div>';
+  for (var d = 1; d <= last.getDate(); d++) {
+    var ds = d2s(new Date(calY,calM,d));
+    h += '<div class="cal-d'+(ds===cur?' cur':ds===tdStr?' today':'')+'" onclick="window.pickDay(\''+ds+'\')">'+d+'</div>';
   }
-  h+='</div>';
-  document.getElementById('cal').innerHTML=h;
+  h += '</div>';
+  document.getElementById('cal').innerHTML = h;
 }
 
-window.calNav = function(dir){ calM+=dir; if(calM>11){calM=0;calY++;} if(calM<0){calM=11;calY--;} drawCal(); };
-window.pickDay = function(ds){ cur=ds; document.getElementById('cal').classList.remove('show'); subscribeDay(); };
+window.calNav = function(dir) { calM += dir; if (calM > 11) { calM=0; calY++; } if (calM < 0) { calM=11; calY--; } drawCal(); };
+window.pickDay = function(ds) { cur = ds; document.getElementById('cal').classList.remove('show'); subscribeDay(); };
 
-document.addEventListener('click',function(e){
-  var cal=document.getElementById('cal'), lbl=document.getElementById('lbl-date');
-  if(cal.classList.contains('show')&&!cal.contains(e.target)&&e.target!==lbl) cal.classList.remove('show');
+document.addEventListener('click', function(e) {
+  var cal = document.getElementById('cal'), lbl = document.getElementById('lbl-date');
+  if (cal.classList.contains('show') && !cal.contains(e.target) && e.target !== lbl) cal.classList.remove('show');
 });
-document.addEventListener('keydown',function(e){ if(e.key==='Escape') window.closeModal(); });
+document.addEventListener('keydown', function(e) { if (e.key === 'Escape') window.closeModal(); });
 
 subscribeDay();
 </script>
