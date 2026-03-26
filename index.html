@@ -122,6 +122,9 @@ header {
 }
 .card-add:hover { border-color: var(--green); color: var(--green); }
 
+.chk-wrap { display: flex; flex-direction: column; gap: 3px; flex-shrink: 0; align-items: center; }
+.chk-label { font-size: 9px; color: var(--text3); font-weight: 500; white-space: nowrap; text-align: center; }
+.chk-row { display: flex; gap: 6px; }
 .chk {
   width: 20px; height: 20px; border-radius: 5px; flex-shrink: 0;
   border: 1.5px solid var(--border2); display: flex; align-items: center;
@@ -129,7 +132,11 @@ header {
   transition: all .15s; color: transparent; background: transparent;
 }
 .chk:hover { border-color: var(--green); }
-.confirmed .chk { background: var(--green); border-color: var(--green); color: #fff; }
+.chk.chk-conf:hover { border-color: var(--green); }
+.chk.chk-miss:hover { border-color: var(--red); }
+.confirmed .chk.chk-conf { background: var(--green); border-color: var(--green); color: #fff; }
+.missed .chk.chk-miss { background: var(--red); border-color: var(--red); color: #fff; }
+.missed { opacity: 0.6; }
 
 .info { flex: 1; min-width: 0; }
 .pname { font-size: 14px; font-weight: 500; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -341,12 +348,17 @@ function render() {
       if (p.material) mat++;
     });
   });
+  var missed = 0;
+  Object.values(dayData).forEach(function(arr) {
+    if (!Array.isArray(arr)) return;
+    arr.forEach(function(p){ if (p.missed) missed++; });
+  });
   document.getElementById('d-total').textContent    = total;
   document.getElementById('d-conf').textContent     = conf;
   document.getElementById('d-sus').textContent      = sus;
   document.getElementById('d-mat').textContent      = mat;
   document.getElementById('d-sub').textContent      = total===1?'agendado hoje':'agendados hoje';
-  document.getElementById('d-conf-sub').textContent = (total-conf)===1?'aguardando confirmação':'aguardando confirmação';
+  document.getElementById('d-conf-sub').textContent = missed > 0 ? missed+(missed===1?' falta':' faltas') : (total-conf)+' aguardando';
 
   // Slots
   var times = Object.keys(dayData).filter(function(k){ return Array.isArray(dayData[k]) && dayData[k].length>0; });
@@ -378,7 +390,7 @@ function render() {
 
     pacientes.forEach(function(p, idx) {
       const card = document.createElement('div');
-      card.className = 'card'+(p.confirmed?' confirmed':'');
+      card.className = 'card'+(p.confirmed?' confirmed':'')+(p.missed?' missed':'');
       var tags = '<span class="tag '+(p.sus?'sus':'part')+'">'+(p.sus?'SUS':'Particular')+'</span>';
       if (p.pclab)    tags += '<span class="tag pclab">PcLab</span>';
       if (p.pardini)  tags += '<span class="tag pardini">Pardini</span>';
@@ -411,7 +423,15 @@ function render() {
 // ── actions ────────────────────────────────────────────
 window.toggleConfirm = function(t, id) {
   var arr = (dayData[t]||[]).map(function(p){
-    return p.id===id ? Object.assign({},p,{confirmed:!p.confirmed}) : p;
+    return p.id===id ? Object.assign({},p,{confirmed:!p.confirmed, missed:false}) : p;
+  });
+  var newData = Object.assign({},dayData); newData[t]=arr;
+  persistData(newData);
+};
+
+window.toggleMissed = function(t, id) {
+  var arr = (dayData[t]||[]).map(function(p){
+    return p.id===id ? Object.assign({},p,{missed:!p.missed, confirmed:false}) : p;
   });
   var newData = Object.assign({},dayData); newData[t]=arr;
   persistData(newData);
